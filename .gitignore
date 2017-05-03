@@ -71,6 +71,8 @@ ipch/
 *.ncb
 *.opensdf
 *.sdf
+*.VC.db
+*.VC.opendb
 *.cachefile
 
 # Visual Studio profiler
@@ -198,3 +200,7 @@ FakesAssemblies/
 /out/
 /src/packages/
 /src/packet-files/
+
+# .NET Core preview tools
+*.lock.json
+

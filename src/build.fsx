@@ -88,6 +88,7 @@ Target "Version" (fun _ ->
     !! "LZ4/Properties/AssemblyInfo.cs"
     ++ "LZ4.net2/Properties/AssemblyInfo.cs"
     ++ "LZ4.portable/Properties/AssemblyInfo.cs"
+    ++ "LZ4.netcore/Properties/AssemblyInfo.cs"
     ++ "LZ4.silverlight/Properties/AssemblyInfo.cs"
     ++ "LZ4pn/Properties/AssemblyInfo.cs"
     ++ "LZ4ps/Properties/AssemblyInfo.cs"
@@ -118,9 +119,9 @@ Target "Release" (fun _ ->
         )
     )
 
-    [ "portable"; "silverlight"; "net2" ]
+    [ "netcore"; "portable"; "silverlight"; "net2" ]
     |> Seq.iter (fun platform ->
-        let sourceDir = sprintf "LZ4.%s/bin/Release" platform
+        let sourceDir = sprintf "LZ4.%s/bin/Release/**" platform
         let targetDir = releaseDir @@ platform
         targetDir |> CleanDir
         !! (sourceDir @@ "*.dll") |> Copy targetDir
@@ -151,26 +152,57 @@ Target "Test" (fun _ ->
 
 Target "Nuget" (fun _ ->
     let apiKey = getSecret "nuget" None
+    let version = releaseNotes.AssemblyVersion
     let libDir spec = spec |> sprintf @"lib\%s" |> Some
     let portableSpec = "portable-net4+win8+wpa81+MonoAndroid+MonoTouch+Xamarin.iOS"
     let silverlightSpec = "portable-net4+win8+wpa81+sl5+wp8+MonoAndroid+MonoTouch+Xamarin.iOS"
-    NuGet (fun p ->
+
+    let files = [
+        ("net2\\*.dll", libDir "net2", None)
+        ("net4\\*.dll", libDir "net4-client", None)
+        ("portable\\*.dll", libDir portableSpec, None)
+        ("silverlight\\*.dll", libDir silverlightSpec, None)
+        ("netcore\\LZ4.dll", libDir "netstandard1.0", None)
+    ]
+
+    let coreDependencies = [
+        ("NETStandard.Library", "1.6.1")
+        ("lz4net.unsafe.netcore", "[" + version + "]")
+    ]
+    
+    let dependencies = [
+        { FrameworkVersion = "net2"; Dependencies = [] }
+        { FrameworkVersion = "net4-client"; Dependencies = [] }
+        { FrameworkVersion = portableSpec; Dependencies = [] }
+        { FrameworkVersion = silverlightSpec; Dependencies = [] }
+        { FrameworkVersion = "netstandard1.0"; Dependencies = coreDependencies }
+    ]
+
+    NuGet (fun p -> 
         { p with
-            Version = releaseNotes.AssemblyVersion
+            Version = version
             WorkingDir = @"../out/release"
             OutputPath = @"../out/release"
             ReleaseNotes = releaseNotes.Notes |> toLines
             References = [@"LZ4.dll"]
             AccessKey = apiKey
-            Files =
-                [
-                    ("net2\\*.dll", libDir "net2", None)
-                    ("net4\\*.dll", libDir "net4-client", None)
-                    ("portable\\*.dll", libDir portableSpec, None)
-                    ("silverlight\\*.dll", libDir silverlightSpec, None)
-                ]
+            Files = files
+            DependenciesByFramework = dependencies
         }
     ) "lz4net.nuspec"
+
+    NuGet (fun p -> 
+        { p with
+            Version = version
+            WorkingDir = @"../out/release"
+            OutputPath = @"../out/release"
+            ReleaseNotes = releaseNotes.Notes |> toLines
+            AccessKey = apiKey
+            Files = [ ("netcore\\LZ4pn.dll", libDir "netstandard1.0", None) ]
+            DependenciesByFramework = [ { FrameworkVersion = "netstandard1.0"; Dependencies = [ net16dep ] } ]
+        }
+    ) "lz4net.unsafe.netcore.nuspec"
+
 )
 
 Target "Zip" (fun _ ->
@@ -184,6 +216,7 @@ Target "Zip" (fun _ ->
     "silverlight" |> zipDir "silverlight"
     "x86" |> zipDir "net4-x86"
     "x64" |> zipDir "net4-x64"
+    "netcore" |> zipDir "netcore"
 )
 
 Target "Dist" ignore
